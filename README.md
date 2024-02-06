@@ -1,1 +1,6 @@
-# Bicycle-Theft-Probability-Analysis-R-
+# Bicycle-Theft-Probability-Analysis-R
+
+The data I used in this project is called bicycle thefts, it's a data set published by the Toronto Police Services. It can be found from https://open.toronto.ca/. This data set contains occurrences of bicycle thefts from 2014 to 2022 and it details the time and place at which the bicycle was stolen. The research question I am trying to answer in this report are "What is the probability of a bicycle being stolen outside?",and "Does this probability change across years?"By outside,it means whether or not your bicycle is located at your living place.As long as the bicycle is not stolen from house or apartment, it is considered to be outside.
+
+Limitations and Improvements
+The model is limited and which is why I say a concordance index of 0.644 is reasonable and not bad. Although we have data of the bikes and the time it occurred, but the causes of crime are composed of many aspect. For example, education, religion, family condition, economic condition of the area etc. Especially true when I found some of the areas in our data tend to have a higher chance of being stolen. Maybe a geospatial logistic regression would be a better choice. Or, separate the data into different regions and run  regression on each region and check accuracy of model to see if there are improvements.
