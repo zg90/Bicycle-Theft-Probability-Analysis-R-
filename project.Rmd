@@ -1,0 +1,71 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+df <-read_csv("shootings-firearm-discharges - 4326.csv")
+reported_crime <- read.csv("Reported Crimes.csv")
+```
+
+
+
+```{r}
+table(df$Time_Range,df$Division,df$Occurrence_year)
+```
+
+```{r}
+df$Death[is.na(df$Death)] <-0 #replace NAs with 0
+df$Injuries[is.na(df$Injuries)] <- 0 #replace NAs with 0
+df %>% group_by(Occurrence_year,Division,Month) %>% summarise(shot_occurrence=n(),
+                                                        death = sum(Death),
+                                                        injuries = sum(Injuries)) ->df2
+
+df %>% count(Time_Range,Division,Occurrence_year,Month) ->time
+```
+
+```{r}
+time %>% pivot_wider(names_from = Time_Range,values_from = n) ->time
+time$Afternoon[is.na(time$Afternoon)] <- 0
+time$Morning[is.na(time$Morning)] <- 0
+time$Evening[is.na(time$Evening)] <- 0
+time$Night[is.na(time$Night)] <- 0
+time$N <- time$Evening +time$Night
+
+```
+
+```{r}
+time %>% left_join(df2,by = c("Occurrence_year","Division","Month"))->final
+final %>% select(-c(Evening,Night))->final
+final
+```
+
+```{r}
+```
+
+
+```{r}
+final %>% pivot_longer(cols = c("Morning","Afternoon","N"),names_to = "Time")
+```
+
+```{r}
+model1 <- lm(shot_occurrence~ Month+Division+N+Morning+Afternoon,data = final)
+summary(model1)
+```
+
+```{r}
+glimpse(final)
+```
+
+
+
+
+
+
+
+
+
