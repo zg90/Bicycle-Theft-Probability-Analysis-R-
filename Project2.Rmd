@@ -1,0 +1,685 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+\begin{titlepage}
+   \begin{center}
+       \vspace*{1cm}
+       
+       \begingroup
+          \fontsize{16pt}{12pt}\selectfont
+          \textbf{STAA57 Project}
+       \endgroup
+
+       \vspace{0.5cm}
+       \begingroup
+          \fontsize{20pt}{12pt}\selectfont
+          \textbf{Factors That Lead to Bikes Being Stolen Outside}
+       \endgroup
+
+            
+       \vspace{1.5cm}
+
+       \textbf{Ze Jun Guan}
+
+       \vfill
+       \includegraphics[width=5cm]{/home/jovyan/STAA57/utoronto.jpg} 
+            
+       \vspace{0.8cm}
+            
+       Departmetn of Statistics\\
+       University of Toronto Scarborough\\
+       Canada\\
+       April 9, 2023
+            
+   \end{center}
+\end{titlepage}
+
+\pagebreak
+# Introduction
+The data I used in this project is called __bicycle thefts__, it's a data set published
+by the Toronto Police Services. It can be found from __https://open.toronto.ca/__.
+This data set contains occurrences of bicycle thefts from 2014 to 2022 and it details
+the time and place at which the bicycle was stolen. The research question I am trying
+to answer in this report are "What is the probability of a bicycle being stolen outside?",and
+"Does this probability change across years?"By outside, it means whether or not 
+your bicycle is located at your living place.As long as the bicycle is not stolen 
+from house or apartment, it is considered to be outside.
+
+```{r include=FALSE}
+library(tidyverse)
+library(knitr)
+```
+
+```{r include=FALSE}
+# read data
+bicycle <- read.csv("bicycle-thefts - 4326.csv")
+```
+
+```{r include=FALSE}
+#remove variables that are not in interest
+bicycle %>% select(Occurrence_Year:Occurrence_DayOfWeek,Occurrence_Hour,Division,
+                Hood_ID,Premises_Type,Bike_Type:Status) ->bicycle2
+```
+
+
+```{r include=FALSE}
+#Set the first three letters of Bike_colour as it's colour, otherwise
+#there will be too many colors involved
+bicycle2 %>% mutate(colour = str_sub(Bike_Colour, start = 1,end = 3)) %>% 
+  filter(colour != "" | colour == "18") ->bicycle2
+
+# remove NA values
+bicycle2 %>% filter(Bike_Speed !=" NA") %>% select(-c(Bike_Colour))->bicycle2
+```
+
+```{r include=FALSE}
+# remove rows with NAs in Occurrence_hour column 
+bicycle2 %>% filter(Occurrence_Hour != "NA" ) ->bicycle2
+```
+
+```{r include=FALSE}
+# remove Division that in unknown
+bicycle2 %>% filter(Division != "NSA") ->bicycle2
+bicycle2<- bicycle2 %>% filter(Occurrence_Year!=2022) #remove year 2022, does not contain full year data
+```
+
+
+```{r include=FALSE}
+# create dummy variables outside, house and apartment
+# if bicycle is stolen outside/house/apartment, it's equal to 1, otherwise 0
+bicycle2 %>% mutate(outside = case_when(Premises_Type == "Outside"|Premises_Type=="Other"|
+                                       Premises_Type=="Educational"|Premises_Type=="Commercial"|
+                                       Premises_Type=="Transit"~1,
+                                     TRUE ~ 0 ),
+                 house = case_when(Premises_Type =="House"~1,
+                                   TRUE ~0),
+                 Apartment = case_when(Premises_Type =="Apartment"~1,
+                                     TRUE~0)) ->bicycle2
+```
+
+# Data Description
+
+After cleaning the data by removing observations with NAs and removing variables
+that are not interested in. The number of observations in the data set has decreased
+from 30154 to 24653, and the number of variables has decreased from 31 to 15.
+The following table describes the variables included in our final data set:
+
+
+```{r echo=FALSE}
+Description = data.frame(
+  "Variable_Names" = c("Occurrence_Year","Occurrence_Month","Occurrence_DayOfWeek",
+                       "Occurrence_Hour","Division","Hood_ID","Premises_Type",
+                       "Bike_Type","Bike_Speed","Colour","Cost_of_Bike",
+                       "Status","Outside","house","Apartment"),
+  "Description" = c("Year of Occurrence",
+                    "Month of Occurrence",
+                    "Day of week theft occurred",
+                    "Hour theft occurred",
+                    "Police Division where event occurred",
+                    "City of Toronto Neighbourhood identifier",
+                    "Premises type of occurrence",
+                    "Bicycle Type",
+                    "Bicycle Speed",
+                    "Colour of bicycle",
+                    "cost of bicycle",
+                    "Statue of event",
+                    "1 if bicycle was stolen outside from living space, 0 otherwise",
+                    "1 if bicycle was stolen from house, 0 otherwise",
+                    "1 if bicycle was stolen from apartment, 0 otherwise")
+)
+kable(Description)
+```
+
+
+# Tables and Graphs
+
+```{r include=FALSE}
+bicycle2 %>% group_by(Occurrence_Year) %>% summarise(outside_percentage = mean(outside),
+                                                  house_percentage =mean(house),
+                                                  apartment_percentage = mean(Apartment)) %>% 
+  slice(6:13) -> Type_percentage
+Type_percentage %>% pivot_longer(cols = c(outside_percentage,house_percentage,
+                                          apartment_percentage), names_to = "AHO") ->Type_percentage
+```
+
+```{r echo=FALSE, fig.height=3, fig.width=5, fig.align="center"}
+# percentage of bikes being stolen outside, house, and in apartment
+Type_percentage %>% ggplot(aes(x= Occurrence_Year, y= value,colour = AHO))+
+                             geom_point()+geom_smooth(method = lm,se = FALSE)+
+  scale_x_continuous(breaks = 2014:2021) +theme_bw() + 
+  labs(x = "Year",y="Proportions",title = "Premises Percentages",caption = "Figure 1")+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+Figure 1 consists of three trends. The blue line represents the percentage of bicycles
+stolen from outside each year. The red line represents the percentage of bicycles
+stolen from apartments each year. The green line represents the percentage of bicycles
+stolen from houses each year. As we can see from Figure 1, proportion for bicycles
+stolen outside or from houses has a overall decreasing trend, but proportion for bicycles
+stolen from apartments are rapidly increasing.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# amount of bike stole in each division across years
+bicycle2 %>% filter(Occurrence_Year==c(2014,2015,2016,2017,2018,
+                                    2019,2020,2021)) %>% 
+  group_by(Occurrence_Year,Division) %>% summarise(count = n()) %>% 
+  ggplot(aes(x = Occurrence_Year, y = count, colour = Division))+geom_point()+
+  geom_line()+facet_wrap(~Division,ncol = 4) +geom_smooth(method = lm,se=FALSE)+
+  labs(x = "Year",y = "Occurrence Frequency", title = "Theft Frequency Across Division",
+       caption = "Figure 2")+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+There's always some areas in the city with higher crime rate than others. In Figure
+2,a graph of theft frequency was plotted across division. It's obvious that for most
+divisions, frequency of theft were under 20 across years.However, divisions __D14__,
+__D51__, __D52__ , __D53__ and __D54__ appears to have high volume of thefts. The 
+linear trend for these divisions might be decreasing at first, but if you take a close
+look, there's a sudden drop in frequency from 2020 to 2022. These drops leads the 
+trend downward, and this could be due to the outbreak of COVID-19.
+
+
+```{r echo=FALSE}
+bicycle2  %>% 
+  ggplot(aes(x=Occurrence_Month)) +geom_bar(fill="light blue" )+scale_x_discrete(limits = month.name)+
+  labs(x = "Month", y= "Frequency of Thefts",title = "Thefts across Months from 2014-2022",
+       caption = "Figure 3") +theme_bw()
+```
+Theft happens all the time and it never stops, but do they get a break just like 
+regular employees. Figure 3 may not answer the whole question, but it seems like
+some thiefs do take a break. Figure 3 is a bar graph of the frequency of thefts across
+months from 2014-2022. Starting from January, frequency gradually increases until
+it reaches the peak in July, and the frequency will taper off after July. 
+Majority of the counts occurs between April and October.
+
+
+```{r echo=FALSE, fig.align="center", fig.height=3, fig.width=5}
+#type of bike thiefs like to steal the most
+bicycle2 %>% group_by(Bike_Type) %>% summarise(count =n()) %>% 
+   mutate(prop = prop.table(count)) ->overall_bike_type
+overall_bike_type %>% arrange(desc(prop)) %>% pull(Bike_Type) %>% unique ->bike_type_order
+bicycle2$Bike_Type <- factor(bicycle2$Bike_Type, levels = bike_type_order)
+
+bicycle2 %>% 
+  ggplot(aes(x = Bike_Type))+
+  geom_bar(fill="light blue")+ labs(x ="Bicycle Type",y="Frequency",title = "Type of Bicycle Stolen",
+                   caption = "Figure 4") +theme_bw()
+```
+
+```{r echo=FALSE}
+overall_bike_type$prop <- round(overall_bike_type$prop,3)
+overall_bike_type %>% arrange(desc(prop)) %>% kable(caption = "Type of Bicycles Stolen(Proportion wise)")
+```
+
+Figure 4 and Table 1 tells the type of bicycles thiefs in favor of. More than 80% of
+bicycles stolen came from type __MT__, __RG__, __OT__, and __RC__.
+
+# Hypothesis Testing 
+
+```{r include=FALSE, fig.height=2, fig.width=3}
+# get number of occurrence from 2014-2022 from outside,house or apartment
+bicycle2 %>%
+  filter(Occurrence_Year >=2014) %>% 
+  group_by(Occurrence_Year) %>% summarise(frequency_outside = sum(outside),
+                                          frequency_house = sum(house),
+                                          frequency_apartment = sum(Apartment)) %>% 
+  mutate(total_frequency = frequency_outside +frequency_house+frequency_apartment) ->outside_percentage
+```
+
+```{r include=FALSE}
+#proportion test for year 2014 and 2022
+x <- outside_percentage$frequency_outside
+y <- outside_percentage$frequency_house
+z <- outside_percentage$frequency_apartment
+n <- outside_percentage$total_frequency
+```
+
+
+```{r echo=FALSE}
+prop.test(x[c(1,8)],n[c(1,8)],alternative = "greater")
+```
+
+```{r echo=FALSE}
+prop.test(y[c(1,8)],n[c(1,8)],alternative = "greater")
+
+```
+
+
+```{r echo=FALSE}
+prop.test(z[c(1,8)],n[c(1,8)],alternative = "less")
+```
+From Figure 1, we knew that the percentage for bicycles stolen outside and from house
+has a decreasing trend. Inversely, bicycles stolen from apartments has an increasing
+percentage. In the above three hypothesis testings, I have set 2014 as the base year, and
+compared it with the proportion of stolen bicycles in 2022. Although we have already
+knew the trend, but more importantly, we would like to know if there are a statistical 
+significant change in proportions? From the result of the first two tests, the null
+hypothesis are $H_0: \pi_{2014,outside} = \pi_{2022,outside}$ and $H_0: \pi_{2014,house} = \pi_{2022,house}$
+respectively. The alternative hypothesis are $H_1: \pi_{2014,outside} > \pi_{2022,outside}$
+and $H_0: \pi_{2014,house} > \pi_{2022,house}$. Both results have p-value much less than
+0.05, and 95% confidence intervals that does not include zeroes. We have strong evidence
+to say that the proportion in 2014 for houses/outside are greater than the proportion
+in 2022. There's a decrease in proportion and it's statistically significant.
+The last test has $H_0: \pi_{2014,apartmetn} = \pi_{2022,apartment}$, and alternative
+hypothesis $H_0: \pi_{2014,apartment} < \pi_{2022,apartment}$. The result of the 
+test has a p-value less than $2.2e-16$ and a 95% confidence interval from
+__[-1,-0.1718078]__. We have enough evidence to say that proportion in 2014 is
+significantly smaller compared to the proportion in 2022 for bicycles stolen 
+from apartments.
+
+
+
+# Regression
+```{r include=FALSE}
+bicycle2 %>% filter(Occurrence_Year==2014) ->bicycle2014
+bicycle2 %>% filter(Occurrence_Year==2015) ->bicycle2015
+bicycle2 %>% filter(Occurrence_Year==2016) ->bicycle2016
+bicycle2 %>% filter(Occurrence_Year==2017) ->bicycle2017
+bicycle2 %>% filter(Occurrence_Year==2018) ->bicycle2018
+bicycle2 %>% filter(Occurrence_Year==2019) ->bicycle2019
+bicycle2 %>% filter(Occurrence_Year==2020) ->bicycle2020
+bicycle2 %>% filter(Occurrence_Year==2021) ->bicycle2021
+
+```
+
+
+
+```{r echo=FALSE}
+# model
+overall <-glm(outside ~Occurrence_Month +Occurrence_Hour+Division+Bike_Type+Bike_Speed+
+                   Cost_of_Bike,data = bicycle2, family = "binomial")
+summary(overall)
+```
+\[
+  logit(p) = \beta_{0} + \beta_{1}x_{Occurrence\ Month} + \beta_{2}x_{Occurrence\ Hour} +
+  \beta_{3}x_{Division} + \beta_{4}x_{Bike\ Type} + \beta_{5}x_{Bike\ Speed} + 
+  \beta_6x_{Cost\ of\ Bike}
+\]
+
+Above is the summary of the table.The baseline category is at April, Occurrence_Hour
+equal to 1 and Division equal to D11. Variable Occurrence_Month, Occurrence_Hour,
+Division and Bike_Type are significant variables to the model, although some of the 
+categories within each variable aren't important. For example, June-October, and
+December are important categories and other months are not. Which means these are
+the months that thieves in favor of. Likewise, time between 6-23 are also important.
+Divisions with high frequency shown in Figure 2 are significant to the model as well.
+One thing to notice about is that the cost of the bike has a negative relationship
+with the odds ratio. This means the more expensive your bike is, it's less likely
+to be stolen from outside. Interesting fact that it is  the opposite of what we 
+generally think.
+\  
+
+For categorical variable Occurrence Month, the regression coefficient is equal
+to 0.2709 in August. This means that the odds of having a bicycle stolen from
+outside is $e^{0.2709} = 1.31$ or 31% higher than stolen from houses or apartments.
+Interpretations are same for other categories.
+For quantitative variable like __Cost of Bike__, it has regression coefficient equal
+to -0.00003857. This means that holding everything else constant, one dollar increase
+in the price of the bicycle, the odds of having it stolen from outside decrease
+by $1 - e^{-0.00003857} = 0.000038569$ or 0.0038569%.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(pROC)
+k=4
+d = bicycle2 %>% mutate(group_ind = sample(c(1:k),size=nrow(bicycle2),replace = T))
+c.index = vector()
+for (i in 1:k){
+d.train = d %>% filter(group_ind != i)
+d.test = d %>% filter(group_ind == i)
+logit.mod = glm(outside ~ Occurrence_Month + Occurrence_Hour + 
+    Division + Bike_Type + Bike_Speed + Cost_of_Bike, family = "binomial", 
+    data = d.train)
+pi_hat = predict(logit.mod, newdata=d.test, type = "response")
+m.roc=roc(d.test$outside ~ pi_hat)
+c.index[i]=auc(m.roc)
+}
+c.index
+mean(c.index)
+```
+
+The result shown above are the concordance index c or AUC value after
+cross validation.This test shows the trade-off between sensitivity and specificity. 
+The concordanceindex c, which estimates the probability that the predictions 
+and the outcomes are concordant.The results showed that our model has a average 
+concordance index of 0.644, which means the probability of predictions and the
+outcomes are concordant is 64.4%. This value isn't high, but based on the limited data
+we have, I would say the concordance index is reasonable for our model.
+
+```{r echo=FALSE}
+boot_function=function(){
+boot_data = bicycle2014 %>% sample_n(size = nrow(bicycle2014), replace = F)
+m2 = glm(outside ~ Occurrence_Month + Occurrence_Hour + 
+    Division + Bike_Type + Bike_Speed + Cost_of_Bike, family = binomial, 
+    data = boot_data)
+s = fitted(m2,type= "response")
+return(s)
+}
+out = replicate(1000, boot_function())
+rowMeans(out) -> rmean2014
+quantile(rmean2014,c(0.05,0.95))
+```
+It's interesting to know whether or not the probability of having your bicycle 
+stolen outside has decreased across years. Using the same model as above, I 
+bootstrapped the observation from 2014 and found the average probability between
+each trial. From those averages, I calculated the 95% confidence interval. The result
+is $[0.6864277 , 0.7038608]$. This means that if you have your bike parked outside,
+the chance of it being stolen is between 68.6% to 70.4%. Which is terrific.
+
+
+```{r echo=FALSE}
+boot_function=function(){
+boot_data = bicycle2021 %>% sample_n(size = nrow(bicycle2021), replace = F)
+m2 = glm(outside ~ Occurrence_Month + Occurrence_Hour + 
+    Division + Bike_Type + Bike_Speed + Cost_of_Bike, family = binomial, 
+    data = boot_data)
+s = fitted(m2,type= "response")
+return(s)
+}
+out = replicate(1000, boot_function())
+rowMeans(out) -> rmean2021
+quantile(rmean2021,c(0.05,0.95))
+
+```
+For simplicity, I only compared the 95% confidence interval between 2014 and 2021.
+The 95% confidence interval for 2021 is $[0.5332302,0.5488628]$. A huge difference
+compare to the confidence interval in 2014.
+
+
+# Conclusion
+From the results in the regression model, we see that Month, bike type,
+division,cost of bike are important factors that influence our model. Other 
+variables like __hour__(the time the bike was stolen) and bike speed has p-values
+close to but greater than 0.05. This indicates that these two variables may also
+be important and we shall include them in the model. Just like how I predicted in 
+the graphs, thieves like to steal during certain months and there are certain
+types of bikes that they like to steal. From our graphs, it showed that theft peak
+happens between July to October, and July to October are the statistically 
+significant months in our model. Theieves also like to steal from some specific
+areas, as some police division are statistically significant and some are not. Most
+interesting fact is that bike with higher cost are less likely to be stolen, perhaps
+this relates to some of the laws in Canada. Different value of stolen items may lead
+to different penalties if you get caught, this might be the reason why expensive
+bikes are less likely to be stolen.
+
+Another research question we'd like to answer is "Did the probability decrease
+over time?" From the bootstrap function, the 95% confidence interval for 2014 and
+2021 has difference of 15~16%. Therefore, we are proud to say that the probability
+has gone down, and it gone done by a lot. Although I didn't do testings among these
+two confidence intervals, but I think it's obvious that they're statistically different.
+
+# Limitations and Improvements
+Like I said earlier, our model is limited and which is why I say a concordance index
+of 0.644 is reasonable and not bad. Although we have data of the bikes and the 
+time it occurred, but the causes of crime are composed of many aspect. For example,
+education, religion, family condition, economic condition of the area etc. 
+More stereotypical speaking, race is also an important factor. Hence, if we 
+would like to improve the accuracy of the model, we should collect all kinds of 
+different data.
+
+
+
+
+\pagebreak
+
+# Appendix
+
+```{r eval=FALSE}
+library(tidyverse)
+library(knitr)
+```
+
+```{r eval=FALSE}
+# read data
+bicycle <- read.csv("bicycle-thefts - 4326.csv")
+```
+
+```{r eval=FALSE}
+#remove variables that are not in interest
+bicycle %>% select(Occurrence_Year:Occurrence_DayOfWeek,Occurrence_Hour,Division,
+                Hood_ID,Premises_Type,Bike_Type:Status) ->bicycle2
+```
+
+
+```{r eval=FALSE}
+#Set the first three letters of Bike_colour as it's colour, otherwise
+#there will be too many colors involved
+bicycle2 %>% mutate(colour = str_sub(Bike_Colour, start = 1,end = 3)) %>% 
+  filter(colour != "" | colour == "18") ->bicycle2
+
+# remove NA values
+bicycle2 %>% filter(Bike_Speed !=" NA") %>% select(-c(Bike_Colour))->bicycle2
+```
+
+```{r eval=FALSE}
+# remove rows with NAs in Occurrence_hour column 
+bicycle2 %>% filter(Occurrence_Hour != "NA" ) ->bicycle2
+```
+
+```{r eval=FALSE}
+# remove Division that in unknown
+bicycle2 %>% filter(Division != "NSA") ->bicycle2
+bicycle2<- bicycle2 %>% filter(Occurrence_Year!=2022) #remove year 2022, does not contain full year data
+```
+
+
+```{r eval=FALSE}
+# create dummy variables outside, house and apartment
+# if bicycle is stolen outside/house/apartment, it's equal to 1, otherwise 0
+bicycle2 %>% mutate(outside = case_when(Premises_Type == "Outside"|Premises_Type=="Other"|
+                                       Premises_Type=="Educational"|Premises_Type=="Commercial"|
+                                       Premises_Type=="Transit"~1,
+                                     TRUE ~ 0 ),
+                 house = case_when(Premises_Type =="House"~1,
+                                   TRUE ~0),
+                 Apartment = case_when(Premises_Type =="Apartment"~1,
+                                     TRUE~0)) ->bicycle2
+```
+
+```{r eval=FALSE}
+Description = data.frame(
+  "Variable_Names" = c("Occurrence_Year","Occurrence_Month","Occurrence_DayOfWeek",
+                       "Occurrence_Hour","Division","Hood_ID","Premises_Type",
+                       "Bike_Type","Bike_Speed","Colour","Cost_of_Bike",
+                       "Status","Outside","house","Apartment"),
+  "Description" = c("Year of Occurrence",
+                    "Month of Occurrence",
+                    "Day of week theft occurred",
+                    "Hour theft occurred",
+                    "Police Division where event occurred",
+                    "City of Toronto Neighbourhood identifier",
+                    "Premises type of occurrence",
+                    "Bicycle Type",
+                    "Bicycle Speed",
+                    "Colour of bicycle",
+                    "cost of bicycle",
+                    "Statue of event",
+                    "1 if bicycle was stolen outside from living space, 0 otherwise",
+                    "1 if bicycle was stolen from house, 0 otherwise",
+                    "1 if bicycle was stolen from apartment, 0 otherwise")
+)
+kable(Description)
+```
+
+```{r eval=FALSE}
+bicycle2 %>% group_by(Occurrence_Year) %>% summarise(outside_percentage = mean(outside),
+                                                  house_percentage =mean(house),
+                                                  apartment_percentage = mean(Apartment)) %>% 
+  slice(6:13) -> Type_percentage
+Type_percentage %>% pivot_longer(cols = c(outside_percentage,house_percentage,
+                                          apartment_percentage), names_to = "AHO") ->Type_percentage
+```
+
+```{r eval=FALSE}
+# percentage of bikes being stolen outside, house, and in apartment
+Type_percentage %>% ggplot(aes(x= Occurrence_Year, y= value,colour = AHO))+
+                             geom_point()+geom_smooth(method = lm,se = FALSE)+
+  scale_x_continuous(breaks = 2014:2021) +theme_bw() + 
+  labs(x = "Year",y="Proportions",title = "Premises Percentages",caption = "Figure 1")+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+```{r eval=FALSE}
+# amount of bike stole in each division across years
+bicycle2 %>% filter(Occurrence_Year==c(2014,2015,2016,2017,2018,
+                                    2019,2020,2021)) %>% 
+  group_by(Occurrence_Year,Division) %>% summarise(count = n()) %>% 
+  ggplot(aes(x = Occurrence_Year, y = count, colour = Division))+geom_point()+
+  geom_line()+facet_wrap(~Division,ncol = 4) +geom_smooth(method = lm,se=FALSE)+
+  labs(x = "Year",y = "Occurrence Frequency", title = "Theft Frequency Across Division",
+       caption = "Figure 2")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+# amount of bikes stolen in each month
+bicycle2  %>% 
+  ggplot(aes(x=Occurrence_Month)) +geom_bar(fill="light blue" )+scale_x_discrete(limits = month.name)+
+  labs(x = "Month", y= "Frequency of Thefts",title = "Thefts across Months from 2014-2022",
+       caption = "Figure 3") +theme_bw()
+
+#type of bike thiefs like to steal the most
+bicycle2 %>% group_by(Bike_Type) %>% summarise(count =n()) %>% 
+   mutate(prop = prop.table(count)) ->overall_bike_type
+overall_bike_type %>% arrange(desc(prop)) %>% pull(Bike_Type) %>% unique ->bike_type_order
+bicycle2$Bike_Type <- factor(bicycle2$Bike_Type, levels = bike_type_order)
+
+#proportion of bike type being stolen
+bicycle2 %>% 
+  ggplot(aes(x = Bike_Type))+
+  geom_bar(fill="light blue")+ labs(x ="Bicycle Type",y="Frequency",title = "Type of Bicycle Stolen",
+                   caption = "Figure 4") +theme_bw()
+#proportion of bike type being stolen(table)
+overall_bike_type$prop <- round(overall_bike_type$prop,3)
+overall_bike_type %>% arrange(desc(prop)) %>% kable(caption = "Type of Bicycles Stolen(Proportion wise)")
+```
+
+
+```{r eval=FALSE}
+# get number of occurrence from 2014-2022 from outside,house or apartment
+bicycle2 %>%
+  filter(Occurrence_Year >=2014) %>% 
+  group_by(Occurrence_Year) %>% summarise(frequency_outside = sum(outside),
+                                          frequency_house = sum(house),
+                                          frequency_apartment = sum(Apartment)) %>% 
+  mutate(total_frequency = frequency_outside +frequency_house+frequency_apartment) ->outside_percentage
+```
+
+```{r eval=FALSE}
+#proportion test for year 2014 and 2022
+x <- outside_percentage$frequency_outside
+y <- outside_percentage$frequency_house
+z <- outside_percentage$frequency_apartment
+n <- outside_percentage$total_frequency
+
+#proportion test for 2014 and 2021 for different premise type
+prop.test(x[c(1,8)],n[c(1,8)],alternative = "greater")
+prop.test(y[c(1,8)],n[c(1,8)],alternative = "greater")
+prop.test(z[c(1,8)],n[c(1,8)],alternative = "less")
+```
+
+```{r eval=FALSE}
+bicycle2 %>% filter(Occurrence_Year==2014) ->bicycle2014
+bicycle2 %>% filter(Occurrence_Year==2015) ->bicycle2015
+bicycle2 %>% filter(Occurrence_Year==2016) ->bicycle2016
+bicycle2 %>% filter(Occurrence_Year==2017) ->bicycle2017
+bicycle2 %>% filter(Occurrence_Year==2018) ->bicycle2018
+bicycle2 %>% filter(Occurrence_Year==2019) ->bicycle2019
+bicycle2 %>% filter(Occurrence_Year==2020) ->bicycle2020
+bicycle2 %>% filter(Occurrence_Year==2021) ->bicycle2021
+
+```
+
+
+
+```{r eval=FALSE}
+# model
+overall <-glm(outside ~Occurrence_Month +Occurrence_Hour+Division+Bike_Type+Bike_Speed+
+                   Cost_of_Bike,data = bicycle2, family = "binomial")
+summary(overall)
+```
+
+```{r eval=FALSE, message=FALSE, warning=FALSE}
+library(pROC)
+# corss validation for model and find c.index
+k=4
+d = bicycle2 %>% mutate(group_ind = sample(c(1:k),size=nrow(bicycle2),replace = T))
+c.index = vector()
+for (i in 1:k){
+d.train = d %>% filter(group_ind != i)
+d.test = d %>% filter(group_ind == i)
+logit.mod = glm(outside ~ Occurrence_Month + Occurrence_Hour + 
+    Division + Bike_Type + Bike_Speed + Cost_of_Bike, family = "binomial", 
+    data = d.train)
+pi_hat = predict(logit.mod, newdata=d.test, type = "response")
+m.roc=roc(d.test$outside ~ pi_hat)
+c.index[i]=auc(m.roc)
+}
+c.index
+mean(c.index)
+```
+
+
+```{r eval=FALSE}
+#bootstrap samples from 2014 and find predicted probability and 
+#find average of the probability, and use it to calculate confindence interval
+boot_function=function(){
+boot_data = bicycle2014 %>% sample_n(size = nrow(bicycle2014), replace = F)
+m2 = glm(outside ~ Occurrence_Month + Occurrence_Hour + 
+    Division + Bike_Type + Bike_Speed + Cost_of_Bike, family = binomial, 
+    data = boot_data)
+s = fitted(m2,type= "response")
+return(s)
+}
+out = replicate(1000, boot_function())
+rowMeans(out) -> rmean2014
+quantile(rmean2014,c(0.05,0.95))
+
+#bootstrap samples from 2021 and find predicted probability and 
+#find average of the probability, and use it to calculate confindence interval
+boot_function=function(){
+boot_data = bicycle2021 %>% sample_n(size = nrow(bicycle2021), replace = F)
+m2 = glm(outside ~ Occurrence_Month + Occurrence_Hour + 
+    Division + Bike_Type + Bike_Speed + Cost_of_Bike, family = binomial, 
+    data = boot_data)
+s = fitted(m2,type= "response")
+return(s)
+}
+out = replicate(1000, boot_function())
+rowMeans(out) -> rmean2021
+quantile(rmean2021,c(0.05,0.95))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
